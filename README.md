@@ -91,4 +91,4 @@ Deployments on Vercel/Netlify should set `NEXT_PUBLIC_API_BASE_URL` to the publi
 ## Troubleshooting
 - **Model fails to load:** check the console log from `backend/app.py`. The API returns `503` with `details` when the Hugging Face pipeline cannot initialize.
 - **Microphone analysis is always real:** this is intentional for the live-recording UX as requested; uploaded files still use the Hugging Face detector.
-- **WSL1 warning:** Node.js tooling requires WSL2 for hardware access. Upgrade the subsystem or run commands from a native environment.
+- **WSL1 warning:** Node.js tooling requires WSL2 for hardware access. Upgrade the subsystem or run commands from a native environment. gg wp
