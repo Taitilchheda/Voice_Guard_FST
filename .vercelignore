@@ -1,0 +1,15 @@
+backend/
+ML/
+*.py
+requirements.txt
+*.pkl
+*.h5
+*.joblib
+*.csv
+node_modules/
+.next/
+.DS_Store
+*.log
+.env.local
+.env*.local
+
