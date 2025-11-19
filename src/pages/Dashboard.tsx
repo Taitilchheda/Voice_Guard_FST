@@ -116,53 +116,53 @@ const Dashboard = () => {
     sampleUrl?: string;
   };
 
-  const recentScans: RecentScan[] = [
-    {
-      id: 1,
-      date: '2024-11-20 14:32 UTC',
-      name: 'BoardMeeting_CFO.wav',
-      result: true,
-      confidence: 98,
-      location: 'New York, USA',
-      sampleUrl: '/samples/biden-original.wav',
-    },
-    {
-      id: 2,
-      date: '2024-11-19 18:11 UTC',
-      name: 'Supplier_Contract_Call.mp3',
-      result: false,
-      confidence: 31,
-      location: 'Toronto, Canada',
-      sampleUrl: '/samples/obama-to-biden.wav',
-    },
-    {
-      id: 3,
-      date: '2024-11-19 09:05 UTC',
-      name: 'Emergency_Response_CheckIn.wav',
-      result: true,
-      confidence: 95,
-      location: 'Berlin, Germany',
-      sampleUrl: '/samples/linus-original-DEMO.mp3',
-    },
-    {
-      id: 4,
-      date: '2024-11-18 21:44 UTC',
-      name: 'Investor_Update_Voicemail.m4a',
-      result: true,
-      confidence: 93,
-      location: 'Singapore',
-      sampleUrl: '/samples/linus-to-musk-DEMO.mp3',
-    },
-    {
-      id: 5,
-      date: '2024-11-18 08:57 UTC',
-      name: 'Outbound_Collection_Attempt.wav',
-      result: false,
-      confidence: 22,
-      location: 'London, UK',
-      sampleUrl: '/samples/linus-to-musk-DEMO.mp3',
-    },
-  ];
+const recentScans: RecentScan[] = [
+  {
+    id: 1,
+    date: '2024-11-20 14:32 UTC',
+    name: 'BoardMeeting_CFO.wav',
+    result: true,
+    confidence: 98,
+    location: 'New York, USA',
+    sampleUrl: 'https://cdn.pixabay.com/download/audio/2023/11/13/audio_2b1e871f7332.mp3?filename=voice-mail-168326.mp3'
+  },
+  {
+    id: 2,
+    date: '2024-11-19 18:11 UTC',
+    name: 'Supplier_Contract_Call.mp3',
+    result: false,
+    confidence: 31,
+    location: 'Toronto, Canada',
+    sampleUrl: 'https://cdn.pixabay.com/download/audio/2023/07/19/audio_cfa6329a2d.mp3?filename=voice-message-155173.mp3'
+  },
+  {
+    id: 3,
+    date: '2024-11-19 09:05 UTC',
+    name: 'Emergency_Response_CheckIn.wav',
+    result: true,
+    confidence: 95,
+    location: 'Berlin, Germany',
+    sampleUrl: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_d1e9c9dc9d.mp3?filename=voice-message-10149.mp3'
+  },
+  {
+    id: 4,
+    date: '2024-11-18 21:44 UTC',
+    name: 'Investor_Update_Voicemail.m4a',
+    result: true,
+    confidence: 93,
+    location: 'Singapore',
+    sampleUrl: 'https://cdn.pixabay.com/download/audio/2023/03/08/audio_1d31dbce5047.mp3?filename=message-voice-14412.mp3'
+  },
+  {
+    id: 5,
+    date: '2024-11-18 08:57 UTC',
+    name: 'Outbound_Collection_Attempt.wav',
+    result: false,
+    confidence: 22,
+    location: 'London, UK',
+    sampleUrl: 'https://cdn.pixabay.com/download/audio/2022/02/24/audio_4b7d4cba2491.mp3?filename=voice-mail-11239.mp3'
+  },
+];
 
   return (
     <div className="container mx-auto px-4 pt-28 py-12">

@@ -30,11 +30,12 @@ package.json
 
 uploads
 reports
-obama-original.wav
-taylor-to-margot.wav
+#obama-original.wav
+#taylor-to-margot.wav
 .env
 Data
 QR_Images
+public/samples/
 updated_deepfake_audio_data_with_tampered.csv
 uploads
 .ML/New/Data
