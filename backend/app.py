@@ -1,4 +1,3 @@
-import random
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -14,30 +13,53 @@ import qrcode
 import io
 import datetime
 import smtplib
+import secrets
 from email.message import EmailMessage
+import librosa
+from transformers import pipeline
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__, static_url_path='/public', static_folder='public')
 CORS(app)
+app.config["JWT_SECRET_KEY"] = os.getenv('JWT_SECRET', 'change-this-secret')
+jwt = JWTManager(app)
 
 # ✅ Connect to MongoDB (Local or Atlas)
-MONGODB_URI = os.getenv('MONGODB_URI')
-MONGODB_DB_NAME = os.getenv('MONGODB_DB_NAME')
-MONGODB_AUDIO_COLLECTION_NAME = os.getenv('MONGODB_AUDIO_COLLECTION_NAME')
+MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/voice_guard')
+MONGODB_DB_NAME = os.getenv('MONGODB_DB_NAME', 'voice_guard')
+MONGODB_AUDIO_COLLECTION_NAME = os.getenv('MONGODB_AUDIO_COLLECTION_NAME', 'audio_files')
+DEEPFAKE_MODEL_ID = os.getenv('DEEPFAKE_MODEL_ID', 'MelodyMachine/Deepfake-audio-detection-V2')
 
-UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
-CSV_FILE_PATH = os.path.join(os.getcwd(), "backend", "updated_deepfake_audio_data_with_tampered.csv")  # Adjust the path as needed
+CSV_FILE_PATH = os.getenv(
+    'DEEPFAKE_CSV_PATH',
+    os.path.join(os.getcwd(), "ML", "New", "updated_deepfake_audio_data_with_tampered.csv")
+)
 QR_IMAGES_FOLDER = os.path.join(app.root_path, 'public', 'QR_images')  # Adjusted path
 
-# Ensure upload folder exists
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Ensure generated asset folders exist
+os.makedirs(QR_IMAGES_FOLDER, exist_ok=True)
 
 # Establish MongoDB connection
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 fs = GridFS(db, collection=MONGODB_AUDIO_COLLECTION_NAME)
+
+# Load Hugging Face model once during startup
+AUDIO_CLASSIFIER = None
+MODEL_LOAD_ERROR = None
+TARGET_SAMPLE_RATE = 16000
+
+try:
+    AUDIO_CLASSIFIER = pipeline("audio-classification", model=DEEPFAKE_MODEL_ID)
+    TARGET_SAMPLE_RATE = getattr(
+        getattr(AUDIO_CLASSIFIER, "feature_extractor", None),
+        "sampling_rate",
+        TARGET_SAMPLE_RATE
+    )
+except Exception as pipeline_error:
+    MODEL_LOAD_ERROR = str(pipeline_error)
 
 #for audio files
 ALLOWED_EXTENSIONS = {
@@ -177,6 +199,31 @@ def find_hex_code(filename):
         print(f"Error reading CSV: {e}")
     return None
 
+
+def ensure_qr_code(code_value: str):
+    """Return the public path to the QR code, generating it if needed."""
+    safe_code = code_value.strip() or secrets.token_hex(8)
+    qr_code_path = os.path.join(QR_IMAGES_FOLDER, f"{safe_code}.png")
+
+    if os.path.exists(qr_code_path):
+        return f"/QR_images/{safe_code}.png"
+
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(safe_code)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        img.save(qr_code_path)
+        return f"/QR_images/{safe_code}.png"
+    except Exception as qr_error:
+        print(f"Error generating QR code: {qr_error}")
+        return None
+
 # Audio Upload and Analysis Routes
 @app.route('/api/audio/upload', methods=['POST'])
 @jwt_required()
@@ -203,40 +250,19 @@ def upload_audio():
             user_id=user_id
         )
         
-        # Find the file in CSV to get hex code
+        # Find or generate verification code
         filename = secure_filename(file.filename)
-        hex_code = find_hex_code(filename)
+        hex_code = find_hex_code(filename) or secrets.token_hex(8)
 
-        if not hex_code:
-            return jsonify({
-                'error': f'No matching record found for filename: {filename}',
-                'available_files': [row['audio_file_name'] for row in csv.DictReader(open(CSV_FILE_PATH))]
-            }), 400
-
-        # Check if QR code exists, if not generate it
-        qr_code_path = os.path.join(QR_IMAGES_FOLDER, f"{hex_code}.png")
-        
-        if not os.path.exists(qr_code_path):
-            try:
-                qr = qrcode.QRCode(
-                    version=1,
-                    error_correction=qrcode.constants.ERROR_CORRECT_L,
-                    box_size=10,
-                    border=4,
-                )
-                qr.add_data(hex_code)
-                qr.make(fit=True)
-                img = qr.make_image(fill='black', back_color='white')
-                img.save(qr_code_path)
-            except Exception as e:
-                print(f"Error generating QR code: {e}")
-                return jsonify({'error': f'Error generating QR code: {str(e)}'}), 500
+        qr_code_url = ensure_qr_code(hex_code)
+        if not qr_code_url:
+            return jsonify({'error': 'Unable to generate QR code'}), 500
 
         # Return the QR code URL and basic file info
         return jsonify({
             'message': 'File uploaded successfully',
             'file_id': str(file_id),
-            'qr_code_url': f"/QR_images/{hex_code}.png",
+            'qr_code_url': qr_code_url,
             'filename': filename,
             'hex_code': hex_code
         }), 200
@@ -378,33 +404,68 @@ def serve_audio_file(file_id):
     except Exception as e:
         return jsonify({'error': 'Unable to serve audio file'}), 500
     
-@app.route('/api/audio/analyze', methods=['GET'])
+@app.route('/api/audio/analyze', methods=['POST'])
 def analyze_audio():
-    filename = request.args.get('filename')
-    if not filename:
+    if AUDIO_CLASSIFIER is None:
+        return jsonify({
+            'error': 'Deepfake model is not available',
+            'details': MODEL_LOAD_ERROR
+        }), 503
+
+    if 'audio' not in request.files:
+        return jsonify({'error': 'Audio file is required'}), 400
+
+    file = request.files['audio']
+
+    if file.filename == '':
         return jsonify({'error': 'Filename is required'}), 400
 
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type'}), 400
+
     try:
-        # Simplified name extraction, handles more variations
-        clean_name = os.path.splitext(os.path.basename(filename))[0].lower()
-        
-        with open('updated_deepfake_audio_data_with_tampered.csv', 'r') as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                # Remove file extension and convert to lowercase
-                csv_name = os.path.splitext(os.path.basename(row['audio_file_name']))[0].lower()
-                
-                # Exact match or contains the clean name
-                if clean_name == csv_name or clean_name in csv_name:
-                    return jsonify({
-                        'label': row['label'].lower()  # Returns either 'real' or 'fake'
-                    })
-        
-        return jsonify({'error': 'File not found in database'}), 404
+        filename = secure_filename(file.filename)
+        hex_code = find_hex_code(filename) or secrets.token_hex(8)
+        qr_code_url = ensure_qr_code(hex_code)
+        verification_id = hex_code.upper()
+
+        audio_bytes = file.read()
+        audio_buffer = io.BytesIO(audio_bytes)
+        waveform, _ = librosa.load(audio_buffer, sr=TARGET_SAMPLE_RATE, mono=True)
+
+        predictions = AUDIO_CLASSIFIER({
+            "array": waveform,
+            "sampling_rate": TARGET_SAMPLE_RATE
+        })
+
+        formatted_scores = [
+            {
+                'label': score.get('label', '').lower(),
+                'score': round(float(score.get('score', 0.0)), 6)
+            } for score in predictions
+        ]
+
+        best_score = max(formatted_scores, key=lambda item: item['score']) if formatted_scores else {
+            'label': 'fake',
+            'score': 0.0
+        }
+
+        normalized_label = best_score['label']
+
+        return jsonify({
+            'label': normalized_label,
+            'confidence': round(best_score['score'] * 100, 2),
+            'scores': formatted_scores,
+            'authenticity': 'authentic' if normalized_label == 'real' else 'deepfake',
+            'verification_id': verification_id,
+            'hex_code': hex_code,
+            'qr_code_url': qr_code_url,
+            'filename': filename
+        })
 
     except Exception as e:
         print(f"Analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to analyze audio'}), 500
     
 # Error Handlers
 @app.errorhandler(400)

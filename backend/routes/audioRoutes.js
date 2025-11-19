@@ -91,12 +91,15 @@ import express from "express";
 import mongoose from "mongoose";
 import multer from "multer";
 import { GridFSBucket } from "mongodb";
-import { authenticate } from "../routes/authRoutes.js";
+import { authenticate } from "./authRoutes.js";
 
 const router = express.Router();
 
 // MongoDB Connection to local database
-const conn = await mongoose.createConnection('mongodb://localhost:27017/VoiceGuard');
+const AUDIO_DB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/VoiceGuard";
+const conn = mongoose.createConnection(AUDIO_DB_URI, {
+  serverSelectionTimeoutMS: 5000
+});
 
 // Create a schema for audio file metadata
 const AudioFileSchema = new mongoose.Schema({
@@ -104,6 +107,7 @@ const AudioFileSchema = new mongoose.Schema({
   contentType: String,
   uploadDate: { type: Date, default: Date.now },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  gridId: { type: mongoose.Schema.Types.ObjectId },
   confidence: Number,
   result: {
     type: String,
@@ -123,6 +127,10 @@ let gridFSBucket;
 conn.once("open", () => {
   console.log("✅ MongoDB connection to VoiceGuard established!");
   gridFSBucket = new GridFSBucket(conn.db, { bucketName: "audioFiles" });
+});
+
+conn.on("error", (err) => {
+  console.error("MongoDB connection error:", err);
 });
 
 // Multer Storage (stores in memory before uploading to GridFS)
@@ -153,38 +161,44 @@ router.post("/upload", authenticate, upload.single("audio"), async (req, res) =>
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded or invalid file type" });
   }
+
+  if (!gridFSBucket) {
+    return res.status(503).json({ error: "Storage service is not ready" });
+  }
+
   const { originalname, mimetype, buffer } = req.file;
   try {
-    // Create metadata
     const metadata = new AudioFile({
       filename: originalname,
       contentType: mimetype,
-      userId: req.user._id, // Assuming authenticate middleware adds user to request
-      confidence: Math.floor(Math.random() * 20) + 80, // Simulated confidence
-      result: Math.random() > 0.7 ? 'deepfake' : 'authentic' // Simulated detection result
+      userId: req.user.id,
+      confidence: Math.floor(Math.random() * 20) + 80,
+      result: Math.random() > 0.7 ? "deepfake" : "authentic"
     });
     await metadata.save();
-    
+
     const uploadStream = gridFSBucket.openUploadStream(originalname, {
       contentType: mimetype,
       metadata: {
         audioFileId: metadata._id
       }
     });
-    
-    uploadStream.write(buffer);
-    uploadStream.end();
-    
-    uploadStream.on("finish", () => {
-      res.status(200).json({ 
-        message: "✅ File uploaded successfully!", 
+
+    uploadStream.end(buffer);
+
+    uploadStream.on("finish", async () => {
+      metadata.gridId = uploadStream.id;
+      await metadata.save();
+
+      res.status(200).json({
+        message: "✅ File uploaded successfully!",
         filename: originalname,
         contentType: mimetype,
         confidence: metadata.confidence,
         result: metadata.result
       });
     });
-    
+
     uploadStream.on("error", (err) => {
       console.error("❌ Upload Error:", err);
       res.status(500).json({ error: "File upload failed" });
@@ -198,7 +212,7 @@ router.post("/upload", authenticate, upload.single("audio"), async (req, res) =>
 // 📌 Fetch Recent Audio Files
 router.get("/recent-files", authenticate, async (req, res) => {
   try {
-    const recentFiles = await AudioFile.find({ userId: req.user._id })
+    const recentFiles = await AudioFile.find({ userId: req.user.id })
       .sort({ uploadDate: -1 }) // Sort by date descending
       .limit(5);
     res.json(recentFiles);
@@ -211,11 +225,16 @@ router.get("/recent-files", authenticate, async (req, res) => {
 // 📌 Get Audio File Stream
 router.get("/file/:id", authenticate, async (req, res) => {
   try {
+    if (!gridFSBucket) {
+      return res.status(503).json({ error: "Storage service is not ready" });
+    }
+
     const file = await AudioFile.findById(req.params.id);
-    if (!file) {
+    if (!file || !file.gridId) {
       return res.status(404).json({ error: "❌ File not found" });
     }
-    const downloadStream = gridFSBucket.openDownloadStream(file._id);
+
+    const downloadStream = gridFSBucket.openDownloadStream(file.gridId);
     res.set("Content-Type", file.contentType);
     downloadStream.pipe(res);
   } catch (err) {

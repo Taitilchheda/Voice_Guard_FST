@@ -70,7 +70,7 @@ const ChatBot = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ type: 'spring', damping: 25 }}
-          className="fixed bottom-24 right-8 w-96 max-w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+          className="fixed bottom-24 left-4 right-4 sm:left-auto sm:right-8 sm:w-96 max-w-xl bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
         >
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 text-white flex justify-between items-center">

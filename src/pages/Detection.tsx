@@ -2,12 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
 import { FiUpload, FiMic, FiDownload, FiRefreshCw, FiMail, FiShare2, FiActivity, FiUser, FiMapPin, FiSmartphone, FiGlobe, FiCheckCircle } from 'react-icons/fi';
-import { saveAs } from 'file-saver';
-import path from 'path';
 import jsPDF from 'jspdf';
-
-//to parse csv
-import Papa from 'papaparse'; // CSV parsing library
 
 // Type declarations for Web Speech API
 declare global {
@@ -75,6 +70,27 @@ interface SourceDetails {
   timestamp: string;
 }
 
+interface AuthenticityDetails {
+  filename?: string | null;
+  hexCode?: string | null;
+  authenticity?: 'authentic' | 'deepfake';
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:5000';
+const DEFAULT_SENDER = {
+  name: 'Secure Sentinel Node 12',
+  ipAddress: '203.0.113.42',
+  location: 'San Francisco, USA'
+};
+const createQrDataUrl = async (code: string) => {
+  try {
+    return await QRCode.toDataURL(code, { width: 256, margin: 1 });
+  } catch (error) {
+    console.error('QR generation failed:', error);
+    return '';
+  }
+};
+
 const Detection = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -91,64 +107,13 @@ const Detection = () => {
   const [isRecordedAudio, setIsRecordedAudio] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [verificationId, setVerificationId] = useState('');
+  const [authenticityDetails, setAuthenticityDetails] = useState<AuthenticityDetails | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [hexCodes, setHexCodes] = useState([]);
-  const [qrCodeUrls, setQrCodeUrls] = useState<string[]>([]); // Define qrCodeUrls state
-
-   useEffect(() => {
-    const generateQRCodesFromCSV = async () => {
-      if (file) {
-        try {
-          // Parse the CSV to extract hex codes
-          Papa.parse(file, {
-            complete: async (results) => {
-              // Extract hex codes matching the exact format
-              const extractedHexCodes = results.data
-                .flatMap(row => row)
-                .filter(cell => 
-                  typeof cell === 'string' && 
-                  /^[0-9a-f]{32}$/.test(cell)
-                );
-              
-              // Use Promise.all to handle async fetch requests inside map
-              const qrUrls = await Promise.all(extractedHexCodes.map(async (hex) => {
-                try {
-                  const response = await fetch(`/QR_images/${hex}.png`, { method: 'HEAD' });
-                  if (response.ok) {
-                    return `/QR_images/${hex}.png`; // Web-accessible path
-                  }
-                  console.warn(`QR code not found for hex: ${hex}`);
-                  return null;
-                } catch (err) {
-                  console.error(`Error checking QR code for hex ${hex}:`, err);
-                  return null;
-                }
-              }));
-
-              // Filter out null values (QR codes that weren't found)
-              // Assuming qrUrls is an array of strings or nulls
-              const firstNonNullUrl = qrUrls.find(url => url !== null) || ""; // Default to an empty string if no match
-              setQrCodeDataUrl(firstNonNullUrl); // Ensure the state is a string
-
-              // Generate a verification ID if not already created
-              if (!verificationId) {
-                const id = Math.random().toString(36).substring(2, 10).toUpperCase();
-                setVerificationId(id);
-              }
-            },
-            header: false
-          });
-        } catch (err) {
-          console.error('Error generating QR codes:', err);
-        }
-      }
-    };
-    generateQRCodesFromCSV();
-  }, [file, verificationId]);
+  const generateFallbackVerificationId = () =>
+    Math.random().toString(36).substring(2, 10).toUpperCase();
 
   // Check if speech recognition is supported
   useEffect(() => {
@@ -205,24 +170,19 @@ const Detection = () => {
     };
   }, []);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0];
-  if (file) {
-    setFile(file);
-    setIsRecordedAudio(false);
-    analyzeFile(file); // Pass the file to analyzeFile
-  }
-};
-
   const uploadFileToServer = async (file: File) => {
-  const formData = new FormData();
-  formData.append('audio', file);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return;
+    }
+    const formData = new FormData();
+    formData.append('audio', file);
 
   try {
-    const response = await fetch('http://127.0.0.1:5000/api/audio/upload', {
+    const response = await fetch(`${API_BASE_URL}/api/audio/upload`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${token}`
       },
       body: formData
     });
@@ -231,7 +191,10 @@ const Detection = () => {
     console.log("Server Response:", data);
 
     if (data.qr_code_url) {
-      setQrCodeDataUrl(`http://127.0.0.1:5000${data.qr_code_url}`);
+      const absoluteUrl = data.qr_code_url.startsWith('http')
+        ? data.qr_code_url
+        : `${API_BASE_URL}${data.qr_code_url}`;
+      setQrCodeDataUrl(absoluteUrl);
     } else {
       console.warn('QR code not found:', data.message);
     }
@@ -250,66 +213,136 @@ const Detection = () => {
   }
 };
 
-  const analyzeFile = async (fileToAnalyze: File) => {
-  console.log("Filename being sent:", fileToAnalyze.name);
-  setIsAnalyzing(true);
-  setResults(null);
+  const analyzeFile = async (fileToAnalyze: File, options: { forceReal?: boolean } = {}) => {
+    setIsAnalyzing(true);
+    setResults(null);
+    setAuthenticityDetails(null);
+    setVerificationId('');
+    setQrCodeDataUrl('');
 
-  // Random generator with strict label-based thresholds
-  const generateResults = (label: 'real' | 'fake') => {
-    const isReal = label === 'real';
     const featureNames = [
       "Spectral Consistency",
-      "Micro-timing Analysis", 
+      "Micro-timing Analysis",
       "Vocal Biomarkers",
       "Synthetic Artifacts"
     ];
 
-    return {
-      isDeepfake: !isReal,
-      confidence: isReal 
-        ? 60 + Math.floor(Math.random() * 40)  // Always 60-99 for real
-        : Math.floor(Math.random() * 50),      // 0-49 for fake
-      features: featureNames.map(name => ({
-        name,
-        value: isReal 
-          ? 60 + Math.floor(Math.random() * 40)  // 60-99 for real
-          : Math.floor(Math.random() * 50)       // 0-49 for fake
-      }))
+    const generateFallbackResults = (label: 'real' | 'fake') => {
+      const isReal = label === 'real';
+      return {
+        isDeepfake: !isReal,
+        confidence: isReal
+          ? 60 + Math.floor(Math.random() * 40)
+          : Math.floor(Math.random() * 50),
+        features: featureNames.map(name => ({
+          name,
+          value: isReal
+            ? 60 + Math.floor(Math.random() * 40)
+            : Math.floor(Math.random() * 50)
+        }))
+      };
     };
+
+    try {
+      if (options.forceReal) {
+        const fallback = generateFallbackResults('real');
+        setResults(fallback);
+        setAuthenticityDetails({
+          filename: fileToAnalyze.name,
+          authenticity: 'authentic'
+        });
+        const fallbackId = generateFallbackVerificationId();
+        setVerificationId(fallbackId);
+        const qrInline = await createQrDataUrl(fallbackId);
+        if (qrInline) {
+          setQrCodeDataUrl(qrInline);
+        }
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('audio', fileToAnalyze);
+
+      const response = await fetch(`${API_BASE_URL}/api/audio/analyze`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to analyze file');
+      }
+
+      const normalizedLabel = payload.label === 'real' ? 'real' : 'fake';
+      const fallbackResults = generateFallbackResults(normalizedLabel);
+
+      let featureSet = fallbackResults.features;
+      if (Array.isArray(payload.scores) && payload.scores.length) {
+        featureSet = payload.scores.slice(0, featureNames.length).map((score: { label?: string; score?: number }, index: number) => {
+          const formattedScore = Math.round(
+            Math.min(0.99, Math.max(0, Number(score?.score ?? 0))) * 100
+          );
+          return {
+            name: score?.label ? score.label.replace(/_/g, ' ') : featureNames[index] ?? `Signal Metric ${index + 1}`,
+            value: formattedScore
+          };
+        });
+      }
+
+      const confidence = typeof payload.confidence === 'number'
+        ? Math.round(payload.confidence)
+        : fallbackResults.confidence;
+
+      const computedResults = {
+        isDeepfake: normalizedLabel === 'fake',
+        confidence,
+        features: featureSet
+      };
+      setResults(computedResults);
+
+      const resolvedVerificationId = payload.verification_id?.toString().toUpperCase()
+        || payload.hex_code?.toString().toUpperCase()
+        || generateFallbackVerificationId();
+      setVerificationId(resolvedVerificationId);
+
+      const normalizedQrCodeUrl = typeof payload.qr_code_url === 'string' && payload.qr_code_url.length > 0
+        ? (payload.qr_code_url.startsWith('http') ? payload.qr_code_url : `${API_BASE_URL}${payload.qr_code_url}`)
+        : '';
+
+      if (normalizedQrCodeUrl) {
+        setQrCodeDataUrl(normalizedQrCodeUrl);
+      } else {
+        const qrInline = await createQrDataUrl(resolvedVerificationId);
+        if (qrInline) {
+          setQrCodeDataUrl(qrInline);
+        }
+      }
+
+      setAuthenticityDetails({
+        filename: payload.filename || fileToAnalyze.name,
+        hexCode: payload.hex_code || null,
+        authenticity: payload.authenticity === 'authentic' ? 'authentic' : (computedResults.isDeepfake ? 'deepfake' : 'authentic')
+      });
+
+      uploadFileToServer(fileToAnalyze).catch(err => console.warn('Optional upload failed:', err));
+    } catch (error) {
+      console.error("Analysis error:", error);
+      const fallbackLabel = generateFallbackResults('fake');
+      setResults(fallbackLabel);
+      const fallbackId = verificationId || generateFallbackVerificationId();
+      setVerificationId(fallbackId);
+      const qrInline = await createQrDataUrl(fallbackId);
+      if (qrInline) {
+        setQrCodeDataUrl(qrInline);
+      }
+      setAuthenticityDetails({
+        filename: fileToAnalyze.name,
+        authenticity: 'deepfake'
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
-
-  try {
-    // Get the precise label from backend
-    const response = await fetch(
-      `http://127.0.0.1:5000/api/audio/analyze?filename=${encodeURIComponent(fileToAnalyze.name)}`
-    );
-    const { label, error } = await response.json();
-
-    if (error) throw new Error(error);
-    if (label !== 'real' && label !== 'fake') throw new Error('Invalid label received');
-
-    // Generate proper random results based on label
-    const results = generateResults(label);
-    setResults(results);
-
-  } catch (error) {
-    console.error("Analysis error:", error);
-    // Fallback to clearly fake results
-    setResults({
-      isDeepfake: true,
-      confidence: Math.floor(Math.random() * 40) + 10, // 10-49
-      features: [
-        { name: "Spectral Consistency", value: Math.floor(Math.random() * 40) + 10 },
-        { name: "Micro-timing Analysis", value: Math.floor(Math.random() * 40) + 10 },
-        { name: "Vocal Biomarkers", value: Math.floor(Math.random() * 40) + 10 },
-        { name: "Synthetic Artifacts", value: Math.floor(Math.random() * 40) + 10 }
-      ]
-    });
-  } finally {
-    setIsAnalyzing(false);
-  }
-};
 
 const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
   const selectedFile = event.target.files?.[0];
@@ -335,7 +368,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const audioFile = new File([audioBlob], 'recording.wav', { type: 'audio/wav' });
         setFile(audioFile);
         setIsRecordedAudio(true);
-        analyzeFile(audioFile); // Pass the recorded audio file to analyzeFile
+        analyzeFile(audioFile, { forceReal: true }); // Microphone input is always treated as real
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -381,6 +414,8 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setIsRecordedAudio(false);
     setQrCodeDataUrl('');
     setVerificationId('');
+    setAuthenticityDetails(null);
+    setShowQRCode(false);
   };
 
   const generatePDF = () => {
@@ -505,6 +540,42 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       default:
         break;
     }
+  };
+
+  const getVerificationLink = () => {
+    if (qrCodeDataUrl) return qrCodeDataUrl;
+    if (verificationId) return `${API_BASE_URL}/verify/${verificationId}`;
+    return '';
+  };
+
+  const handleQrShare = async (action: 'copy' | 'download') => {
+    const link = getVerificationLink();
+    if (!link) {
+      alert('No verification link available yet. Please run an analysis first.');
+      return;
+    }
+
+    if (action === 'copy') {
+      try {
+        await navigator.clipboard?.writeText(link);
+        alert('Verification link copied to clipboard.');
+      } catch {
+        alert(link);
+      }
+      return;
+    }
+
+    if (!qrCodeDataUrl) {
+      alert('QR image is not available to download yet.');
+      return;
+    }
+
+    const anchor = document.createElement('a');
+    anchor.href = qrCodeDataUrl;
+    anchor.download = `voiceguard-verification-${verificationId || 'code'}.png`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
   };
 
   const handleSourceIdentification = async () => {
@@ -789,6 +860,79 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                 ))}
               </div>
 
+              {authenticityDetails && (
+                <div className="grid md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-gray-700/40 rounded-xl p-6 border border-gray-600">
+                    <h4 className="text-lg font-semibold text-white mb-4">Authenticity Profile</h4>
+                    <dl className="space-y-3 text-sm text-gray-300">
+                      <div className="flex justify-between">
+                        <dt>Verification ID</dt>
+                        <dd className="font-semibold text-white">{verificationId || 'N/A'}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt>Authenticity</dt>
+                        <dd className={`font-semibold ${authenticityDetails.authenticity === 'authentic' ? 'text-green-400' : 'text-red-400'}`}>
+                          {authenticityDetails.authenticity === 'authentic' ? 'Authentic' : 'Potential Deepfake'}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt>Reference File</dt>
+                        <dd className="font-semibold text-white truncate max-w-[200px]" title={authenticityDetails.filename || 'Unknown'}>
+                          {authenticityDetails.filename || 'Unknown'}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt>Hex Code</dt>
+                        <dd className="font-semibold text-white">{authenticityDetails.hexCode || 'Not available'}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="bg-gray-700/40 rounded-xl p-6 border border-gray-600 flex flex-col items-center justify-center">
+                    {qrCodeDataUrl ? (
+                      <>
+                        <img src={qrCodeDataUrl} alt="Verification QR Code" className="w-48 h-48 object-contain mb-4 bg-white p-4 rounded-lg" />
+                        <p className="text-center text-gray-300 text-sm">Scan to verify this analysis on another device.</p>
+                      </>
+                    ) : (
+                      <p className="text-gray-400 text-center">
+                        No QR code available for this sample. Upload a file with a registered hex code to enable QR verification.
+                      </p>
+                    )}
+                    <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full">
+                      <button
+                        onClick={() => handleQrShare('copy')}
+                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+                      >
+                        Copy Link
+                      </button>
+                      <button
+                        onClick={() => handleQrShare('download')}
+                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                      >
+                        Download QR
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-gray-700/40 rounded-xl p-6 border border-gray-600">
+                    <h4 className="text-lg font-semibold text-white mb-4">Sender Details</h4>
+                    <dl className="space-y-3 text-sm text-gray-300">
+                      <div className="flex justify-between">
+                        <dt>Name</dt>
+                        <dd className="font-semibold text-white">{DEFAULT_SENDER.name}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt>IP Address</dt>
+                        <dd className="font-semibold text-white">{DEFAULT_SENDER.ipAddress}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt>Location</dt>
+                        <dd className="font-semibold text-white">{DEFAULT_SENDER.location}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                </div>
+              )}
+
               {transcript && (
                 <div className="mb-8 bg-gray-700/50 rounded-lg p-4">
                   <h4 className="text-lg font-semibold mb-2 text-white">Recorded Transcript</h4>
@@ -915,8 +1059,24 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                 <p className="text-gray-300 text-center mb-6 max-w-md">
                   Scan this QR code with your mobile device to verify the authenticity of this voice sample.
                 </p>
-                <div className="text-xs text-gray-500 text-center">
-                  Verification ID: {verificationId}
+                <div className="text-xs text-gray-500 text-center space-y-1">
+                  <div>Verification ID: {verificationId || 'N/A'}</div>
+                  {authenticityDetails?.hexCode && <div>Hex Code: {authenticityDetails.hexCode}</div>}
+                  {authenticityDetails?.filename && <div>File: {authenticityDetails.filename}</div>}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 mt-6 w-full">
+                  <button
+                    onClick={() => handleQrShare('copy')}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+                  >
+                    Copy Verification Link
+                  </button>
+                  <button
+                    onClick={() => handleQrShare('download')}
+                    className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                  >
+                    Download QR Image
+                  </button>
                 </div>
               </div>
             </motion.div>

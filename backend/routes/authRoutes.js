@@ -1,7 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
-import User from "../../models/userModel.js";
+import bcrypt from "bcryptjs";
+import User from "../models/userModel.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -9,7 +9,8 @@ const router = express.Router();
 
 // Generate JWT Token
 const generateToken = (user) => {
-  return jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+  const secret = process.env.JWT_SECRET || "change-this-secret";
+  return jwt.sign({ id: user._id }, secret, { expiresIn: "1h" });
 };
 
 // Signup Route
@@ -17,12 +18,18 @@ router.post("/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    if (await User.findOne({ email })) {
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (await User.findOne({ email: normalizedEmail })) {
       return res.status(400).json({ error: "Email already registered" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ username, email, password: hashedPassword });
+    const newUser = new User({ username, email: normalizedEmail, password: hashedPassword });
     await newUser.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -36,7 +43,12 @@ router.post("/signup", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -65,7 +77,7 @@ const authenticate = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "change-this-secret");
     req.user = decoded;
     next();
   } catch (err) {

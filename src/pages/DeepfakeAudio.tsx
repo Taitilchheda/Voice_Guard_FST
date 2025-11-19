@@ -140,10 +140,12 @@ const DeepfakeAudioPage = () => {
 
       // Get voice data for selected voice
       const voiceData = FAMOUS_VOICES.find(v => v.id === selectedVoice);
+      const activePitch = pitch;
+      const activeRate = rate;
 
       // Set voice properties
-      utterance.rate = voiceData?.rate || rate;
-      utterance.pitch = voiceData?.pitch || pitch;
+      utterance.rate = activeRate;
+      utterance.pitch = activePitch;
 
       // Set the selected voice
       if (voiceData) {
@@ -151,9 +153,9 @@ const DeepfakeAudioPage = () => {
           const defaultVoice = availableVoices.find(v => v.default) || availableVoices[0];
           if (defaultVoice) utterance.voice = defaultVoice;
         } else {
-          const matchedVoice = findBestVoiceMatch(voiceData.voiceName);
-          if (matchedVoice) utterance.voice = matchedVoice;
-        }
+      const matchedVoice = findBestVoiceMatch(voiceData.voiceName);
+        if (matchedVoice) utterance.voice = matchedVoice;
+      }
       }
 
       // Start recording
@@ -201,9 +203,7 @@ const DeepfakeAudioPage = () => {
 
   const startProgressTimer = () => {
     stopProgressTimer();
-    const voiceData = FAMOUS_VOICES.find(v => v.id === selectedVoice);
-    const currentRate = voiceData?.rate || rate;
-    const duration = text.length / (12 * currentRate); // Adjust duration based on rate
+    const duration = text.length / (12 * rate); // Adjust duration based on rate
     const increment = 100 / (duration * 10);
     
     progressInterval.current = setInterval(() => {
