@@ -1,0 +1,88 @@
+.dashboard-container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 20px;
+  }
+  
+  .dashboard-header {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #2E2C34;
+  }
+  
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .btn-primary {
+    background-color: #5E5ADB;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .user-profile {
+    width: 40px;
+    height: 40px;
+    background-color: #5E5ADB;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+  }
+  
+  .dashboard-card {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    padding: 20px;
+  }
+  
+  .main-card {
+    grid-column: span 8;
+  }
+  
+  .card-header {
+    margin-bottom: 20px;
+  }
+  
+  .card-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #2E2C34;
+  }
+  
+  .card-header p {
+    color: #888891;
+    font-size: 14px;
+  }
+  
+  .chart-container {
+    height: 250px;
+    position: relative;
+  }
+  
+  /* Add other styles from previous implementation as needed */

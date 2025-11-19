@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* For modern browsers (Chrome, Edge, Safari) */
+html {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+  
+  html::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Opera */
+  }
+  
+  body {
+    overflow-y: scroll; /* Ensures consistent layout */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
