@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
@@ -76,7 +78,7 @@ interface AuthenticityDetails {
   authenticity?: 'authentic' | 'deepfake';
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:5000';
 const DEFAULT_SENDER = {
   name: 'Secure Sentinel Node 12',
   ipAddress: '203.0.113.42',

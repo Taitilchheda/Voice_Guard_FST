@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FiSend, FiMessageSquare, FiStar, FiAward, FiGift } from 'react-icons/fi';

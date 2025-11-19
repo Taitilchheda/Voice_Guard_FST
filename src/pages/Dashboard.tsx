@@ -1,4 +1,7 @@
+'use client';
+
 // pages/Dashboard.tsx
+
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';

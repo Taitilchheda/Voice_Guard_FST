@@ -1,3 +1,5 @@
+ 'use client';
+
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiUser, FiLock, FiMail, FiChevronRight, FiEye, FiEyeOff, FiShield } from 'react-icons/fi';

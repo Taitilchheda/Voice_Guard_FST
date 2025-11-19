@@ -1,7 +1,9 @@
+'use client';
+
 // contexts/AuthContext.tsx
 import { createContext, useContext, useState } from 'react';
 import { Loader2 as LoaderIcon, LogIn as LoginIcon, LogOut as LogoutIcon } from 'lucide-react';
-import Button from '../components/Button'; // Update the path to the correct location of the Button component
+import Button from '@/components/Button'; // Update the path to the correct location of the Button component
 
 type AuthContextType = {
   isAuthenticated: boolean;

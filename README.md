@@ -12,14 +12,14 @@ Voice Guard is a full-stack toolkit for detecting, generating, and securing audi
 ## Tech Stack
 | Area      | Technologies |
 |-----------|--------------|
-| Frontend  | React 18, TypeScript, Vite, Tailwind, Framer Motion, MUI |
+| Frontend  | Next.js 15 (App Router), TypeScript, Tailwind, Framer Motion, MUI |
 | Auth/File API | Node.js, Express, MongoDB/Mongoose, GridFS |
 | Detection API | Flask, Flask-JWT-Extended, Hugging Face transformers |
 
 ## Project Layout
 ```
 backend/                # Flask API (app.py) + Express/Mongo services
-src/                    # React application (Vite)
+src/                    # Next.js application (App Router)
 ML/New/                 # CSV data + QR tooling
 requirements.txt        # Python backend dependencies
 ```
@@ -65,16 +65,16 @@ The service hosts `/auth/*` and `/audio/*` endpoints and relies on the shared Mo
 npm install
 npm run dev
 ```
-Create `src/.env` or `.env.local` in the project root with:
+Create `.env.local` (Next.js convention) in the project root with:
 ```
-VITE_API_BASE_URL=http://127.0.0.1:5000
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:5000
 ```
-Deployments on Vercel/Netlify should set `VITE_API_BASE_URL` to the externally reachable Flask backend URL. Build using `npm run build` and point Vercel/Netlify to the `dist` folder.
+Deployments on Vercel/Netlify should set `NEXT_PUBLIC_API_BASE_URL` to the publicly reachable Flask backend URL. Build using `npm run build`; Vercel automatically serves the `.next` output while other hosts can run `npm run start`.
 
 ## Deployment Notes
 1. **Frontend (Vercel/Netlify):**
-   - set `VITE_API_BASE_URL` in the hosting dashboard.
-   - run the default Vite build command (`npm run build`).
+   - set `NEXT_PUBLIC_API_BASE_URL` in the hosting dashboard.
+   - run the default Next build command (`npm run build`) and let the platform serve `.next`.
 2. **Backend (Flask):**
    - host on Render/Railway/EC2/etc. Running via `gunicorn backend.app:app` is production ready.
    - ensure system packages for `librosa` (ffmpeg/libsndfile) are available on the target image.

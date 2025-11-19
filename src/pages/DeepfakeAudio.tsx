@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useRef, useEffect } from 'react';
 import Button from '../components/Button';
 import { Mic, Download, PlayArrow, Pause, GraphicEq } from '@mui/icons-material';

@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.next
 *.local
 
 # Editor directories and files
@@ -33,7 +34,6 @@ obama-original.wav
 taylor-to-margot.wav
 .env
 Data
-public
 QR_Images
 updated_deepfake_audio_data_with_tampered.csv
 uploads

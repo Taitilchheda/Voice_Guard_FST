@@ -1,12 +1,14 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { Shield, Home, BarChart2, MessageSquare, Menu, X, LogIn, Mic } from 'lucide-react';
-import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
 
   const navItems = [
     { path: '/', label: 'Home', icon: Home },
@@ -20,7 +22,7 @@ const Navigation = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-2">
+            <Link href="/" className="flex items-center space-x-2">
               <Shield className="w-8 h-8 text-blue-600" />
               <span className="font-semibold text-xl dark:text-gray-300">VoiceGuard</span>
             </Link>
@@ -33,9 +35,9 @@ const Navigation = () => {
               return (
                 <Link
                   key={item.path}
-                  to={item.path}
+                  href={item.path}
                   className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-all duration-200 ${
-                    location.pathname === item.path
+                    pathname === item.path
                       ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
                       : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/50'
                   }`}
@@ -48,9 +50,9 @@ const Navigation = () => {
             
             {/* Generate Audio Button */}
             <button
-              onClick={() => navigate('/deepfake-audio')}
+              onClick={() => router.push('/deepfake-audio')}
               className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-all duration-200 ${
-                location.pathname === '/deepfake-audio'
+                pathname === '/deepfake-audio'
                   ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
                   : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/50'
               }`}
@@ -61,7 +63,7 @@ const Navigation = () => {
             
             {/* Login Button */}
             <Link 
-              to="/auth" 
+              href="/auth" 
               className="flex items-center space-x-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
             >
               <LogIn className="w-5 h-5" />
@@ -93,9 +95,9 @@ const Navigation = () => {
             return (
               <Link
                 key={item.path}
-                to={item.path}
+                href={item.path}
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium ${
-                  location.pathname === item.path
+                  pathname === item.path
                     ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/50'
                 }`}
@@ -110,11 +112,11 @@ const Navigation = () => {
           {/* Generate Audio Button (Mobile) */}
           <button
             onClick={() => {
-              navigate('/deepfake-audio');
+              router.push('/deepfake-audio');
               setIsOpen(false);
             }}
             className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium w-full ${
-              location.pathname === '/deepfake-audio'
+              pathname === '/deepfake-audio'
                 ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
                 : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/50'
             }`}
@@ -125,7 +127,7 @@ const Navigation = () => {
           
           {/* Login Button (Mobile) */}
           <Link 
-            to="/auth" 
+            href="/auth" 
             className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-base font-medium"
             onClick={() => setIsOpen(false)}
           >

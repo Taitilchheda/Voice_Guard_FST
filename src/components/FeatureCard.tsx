@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { FiShield, FiActivity, FiLock, FiBarChart2 } from 'react-icons/fi';
 

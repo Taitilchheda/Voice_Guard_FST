@@ -1,5 +1,7 @@
+'use client';
+
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { FiShield, FiActivity, FiLock, FiBarChart2, FiGlobe, FiUsers, FiTrendingUp, FiAward } from 'react-icons/fi';
 
 const Home = () => {
@@ -34,8 +36,8 @@ const Home = () => {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
           >
-            <Link 
-              to="/detect" 
+            <Link
+              href="/detect" 
               className="inline-flex items-center px-8 py-3 bg-white text-blue-600 font-semibold rounded-full hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               Analyze Voice Now
@@ -91,8 +93,8 @@ const Home = () => {
         <p className="text-xl mb-8 max-w-2xl mx-auto text-gray-600 dark:text-gray-300">
           Join thousands of users protecting their vocal identity today.
         </p>
-        <Link 
-          to="/detect" 
+        <Link
+          href="/detect"
           className="inline-flex items-center px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-lg shadow-lg hover:shadow-xl transition-all"
         >
           Start Free Analysis
